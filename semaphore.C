@@ -21,7 +21,7 @@ Semaphore::~Semaphore(){
 }
 
 // Post
-int Semaphore::P(void){
+int Semaphore::Post(void){
   // Lock the semaphore
   pthread_mutex_lock(&this->m);
   this->value--;
@@ -34,8 +34,8 @@ int Semaphore::P(void){
   return this->value;
 }
 
-// Wati
-int Semaphore::V(void){
+// Wait
+int Semaphore::Wait(void){
   // Wait
   pthread_mutex_lock(&this->m);
   this->value++;

@@ -8,22 +8,20 @@
 
 using namespace std;
 
-template <class T>
-BoundedBuffer<T>::BoundedBuffer(int d_size): sem(Semaphore(1)),
+BoundedBuffer::BoundedBuffer(int d_size): sem(Semaphore(1)),
                                                            empty(Semaphore(1)),
                                                            full(Semaphore(1)){
   // Need to initialize our semaphores
   this->pos = 0;
   this->size = d_size;
   // Create our buffers
-  this->data = new T[d_size];
+  this->data = new string[d_size];
   // Do any additional setup that might be required
 
 }
 
 // We might want to look into a way to sleep until the thing is no longer full
-template <class T>
-int BoundedBuffer<T>::Pop_On(T data){
+int BoundedBuffer::Pop_On(string data){
   this->sem.Wait();
   // Wait until we have control of a non full buffer
   // This seems poorly written. I would rather have something that can
@@ -41,7 +39,7 @@ int BoundedBuffer<T>::Pop_On(T data){
   // Check if we were empty and need to do something about that
   if (this->pos == -1){
     pos++;
-    this.empty.Post();
+    this->empty.Post();
   }else{
     // Otherwise we just increment the position pointer
     pos++;
@@ -49,8 +47,7 @@ int BoundedBuffer<T>::Pop_On(T data){
   this->sem.Post();
   return 1;
 }
-template <class T>
-T BoundedBuffer<T>::Pop_Off(void){
+string BoundedBuffer::Pop_Off(void){
   this->sem.Wait();
   // Wait until the buffer is not empty
   // And we have control over the data
@@ -64,7 +61,7 @@ T BoundedBuffer<T>::Pop_Off(void){
     this->sem.Wait();
   }
   bool dat_set = false;
-  T val = this->data[this->pos];
+  string val = this->data[this->pos];
 
   //check if we are going from full --> not full    
   if (this->pos == (this->size-1)){
@@ -83,8 +80,7 @@ T BoundedBuffer<T>::Pop_Off(void){
 }
 
 // OH NO WE"RE GOING DOWN
-template <class T>
-BoundedBuffer<T>::~BoundedBuffer(){
+BoundedBuffer::~BoundedBuffer(){
   // free the buffers
   delete [] this->data;
   // Free the Semaphores

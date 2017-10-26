@@ -12,7 +12,6 @@ using namespace std;
 
 
 // Type for the data
-template <typename T>
 class BoundedBuffer {
   private:
     Semaphore sem;
@@ -20,15 +19,15 @@ class BoundedBuffer {
     Semaphore full;
     int pos;
     int size;
-    T* data;
+    string* data;
   public:
     // Constructor
     BoundedBuffer(int d_size);
     
     // Returns 1 if successful, 0 if it is not
-    int Pop_On(T data);
+    int Pop_On(string data);
     // R
-    T Pop_Off(void); 
+    string Pop_Off(void); 
     
     
     // Destructor
