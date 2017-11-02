@@ -25,6 +25,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <chrono>
+#include <thread>
 #include "bounded_buffer.H"
 #include "reqchannel.H"
 
@@ -33,7 +35,7 @@ vector<BoundedBuffer> writer_buff;
 vector<BoundedBuffer>  stat_buffer;
 bool patient_channels_alive[3];
 struct Worker_Args{
-  int worker_id;
+  RequestChannel* channel;
 };
 
 struct Request_Args{
@@ -58,7 +60,7 @@ string int2string(int number) {
 }
 
 int lookup_id_for_name(string name){
-  if (name == "John Smith"){
+  if (name == "Joe Smith"){
     return 0;
   }else if (name == "Jane Smith"){
     return 1;
@@ -76,25 +78,32 @@ float curr_time(){
 
 // Worker Thread Execution
 void* worker_thread(void* arg){
+  cout << "Worker Thread" << endl << flush; 
   // Do worker thread work here
   struct Worker_Args* args = (struct Worker_Args*) arg;
-  string channel_id = "worker" + int2string(args->worker_id);
-  RequestChannel channel(channel_id, RequestChannel::Side::CLIENT_SIDE);
+  // Channel_Name is passed by main function after
+  // a channel has been created by the dataserver
+  RequestChannel* channel = args->channel;
   // Arg will pass our request channel
   while (patient_channels_alive[0] || patient_channels_alive[1]
-        || patient_channels_alive[2]) {  
+        || patient_channels_alive[2]) { 
+    cout << "Worker Threads Alive" <<  endl << flush;
     for(int i=0; i< 3; i++){
       if (patient_channels_alive[i]){
         // Loop through each patient buffer
+        cout << "Getting Data" << endl << flush;
         string request = writer_buff[i].Pop_Off();
+        cout << request << endl << flush;
         // write it to the server
-        string ret_val = channel.send_request(request);
+        string ret_val = channel->send_request(request);
+        cout << ret_val << endl;
         if (ret_val == "bye"){
           // Send a notification out that this channel decided to die 
           patient_channels_alive[i] = false;
         }else{
           stat_buffer[i].Pop_On(ret_val); 
         }
+        //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
       }
     }
   }
@@ -106,6 +115,7 @@ void* worker_thread(void* arg){
 
 void* statistic_thread(void* args){
   // Do Statistic's things
+  cout << "Statistics Thread Started" << endl;
   struct Statistics_Args* arg = (struct Statistics_Args*)args;
   int recv_reqs = 0;
   // Initialize our output file
@@ -115,8 +125,10 @@ void* statistic_thread(void* args){
   while (recv_reqs < arg->total_req_num){
     // get the request  
     string req_dat = stat_buffer[arg->id_num].Pop_Off();
+    cout << "Got Data " << req_dat << endl << flush; 
     float currTime = curr_time();
     o_file << req_dat + "," << currTime << endl;
+    recv_reqs++;
   }
   // Finished all of the requests so we destroy ourselves
   pthread_exit(NULL);
@@ -131,16 +143,19 @@ void* statistic_thread(void* args){
  */
 void* request_thread(void* args){
   // Do Request Thread work here
-    
+  cout << "Request Thread Started" << endl;
   struct Request_Args* arg = (struct Request_Args*) args;
   int sent_requests = 0;
   int id = lookup_id_for_name(arg->name);
+  cout << "Name ID:: " << id << endl << flush;
   ofstream o_file(arg->o_file);
   o_file << "TimeSinceStart" << endl;
-  string request_string = "data " + arg->name;
+  string request_string = "data";
   while (sent_requests < arg->total_req_num){
-    o_file << curr_time() << endl; 
+    cout << "Popping On " << request_string << endl << flush;
+    o_file << curr_time() << endl;
     writer_buff[id].Pop_On(request_string);
+    sent_requests++;
   }
   // Now we send the quit command
   writer_buff[id].Pop_On("quit");
@@ -187,12 +202,36 @@ int main(int argc, char * argv[]) {
         break;
     }
   }
-  pthread_t threads[num_worker_threads + 6];
+  if (total_requests == 0){
+    total_requests = 10000;
+    bounded_buffer_size = 10;
+    num_worker_threads = 3;
+  }
   //Make the buffers
   for (int i=0 ; i<3; i++){
     writer_buff.push_back(BoundedBuffer(bounded_buffer_size));
     stat_buffer.push_back(BoundedBuffer(bounded_buffer_size));
+    cout << "Added Buffer" << endl;
   }
+  pthread_t threads[num_worker_threads + 6];
+  
+  vector<RequestChannel*> w_channels;
+  // Control thread
+  RequestChannel contr ("control",RequestChannel::CLIENT_SIDE);
+  RequestChannel* curr_channel;
+  struct Worker_Args worker_arguments[num_worker_threads];
+  for (int i=0; i < num_worker_threads; i++){
+    string name = contr.send_request("newthread");
+    curr_channel = new RequestChannel(name, RequestChannel::CLIENT_SIDE);
+    w_channels.push_back(curr_channel);
+    worker_arguments[i] = {curr_channel};
+    cout << name << endl;
+  }
+  // Created all the users and ready to go
+    
+    
+    
+    
   // Now we generate 3 patients
   string patient1 = "Joe Smith"; 
   string o_file_stat1 = "JoeSmithStat.csv";
@@ -214,7 +253,19 @@ int main(int argc, char * argv[]) {
   struct Request_Args pat1_req = {total_requests,patient1,o_file_req1};
   struct Request_Args pat2_req = {total_requests,patient2,o_file_req2};
   struct Request_Args pat3_req = {total_requests,patient3,o_file_req3};
-  start_time = clock(); 
+  
+  
+  // Insantiate Worker Threads
+  // Get the three datanames for the return file
+  // Generate the worker threads
+  for (int i=0; i < num_worker_threads; i++){
+    pthread_create(&threads[i+6], NULL, worker_thread,(void*)&worker_arguments[i]); 
+  }
+  
+
+  
+  
+  start_time = clock();
   // Generate the statistic channels
   pthread_create(&threads[0], NULL, statistic_thread,(void*)&pat1_stat);
   pthread_create(&threads[1], NULL, statistic_thread,(void*)&pat2_stat);
@@ -223,16 +274,8 @@ int main(int argc, char * argv[]) {
   pthread_create(&threads[3], NULL, request_thread,(void*)&pat1_req);
   pthread_create(&threads[4], NULL, request_thread,(void*)&pat2_req);
   pthread_create(&threads[5], NULL, request_thread,(void*)&pat3_req);
-  struct Worker_Args worker_arguments[num_worker_threads];
-  for (int i=6; i < num_worker_threads; i++){
-    worker_arguments[i] = {i-6};
-    pthread_create(&threads[i], NULL, worker_thread,(void*)&worker_arguments[i-6]); 
-  }
-  // Now lets build some worker threads
   // Start Clock right before the time
-  while (patient_channels_alive[0] || patient_channels_alive[1] || 
-          patient_channels_alive[2]){
-    // Just loop till we are done
+  for (int i=6; i < num_worker_threads +6; i++){
+    pthread_join(threads[i], NULL);
   }
-  usleep(1000000);
 }

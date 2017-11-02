@@ -3,6 +3,7 @@
 
 // Includes
 #include <string>
+#include <vector>
 #include "semaphore.H"
 // Data structure for popping data on and off of a stack with thread safety (some at least :) )
 
@@ -19,7 +20,7 @@ class BoundedBuffer {
     Semaphore full;
     int pos;
     int size;
-    string* data;
+    vector<string> data;
   public:
     // Constructor
     BoundedBuffer(int d_size);

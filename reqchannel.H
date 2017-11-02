@@ -85,7 +85,7 @@ public:
 
      NOTE: It is easy to open too many request channels in parallel. In most systems,
      limits on the number of open files per process limit the number of established
-     request channels to 125.
+     request channels to 125
   */
 
   ~RequestChannel();

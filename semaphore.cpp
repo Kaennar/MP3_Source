@@ -24,10 +24,10 @@ Semaphore::~Semaphore(){
 int Semaphore::Post(void){
   // Lock the semaphore
   pthread_mutex_lock(&this->m);
-  this->value--;
+  this->value++;
   if (this->value <= 0){
     // Need to signal our mutex and be done with it
-    pthread_cond_signal(&this->c);
+    pthread_cond_broadcast(&this->c);
   
   }
   pthread_mutex_unlock(&this->m);
@@ -38,9 +38,9 @@ int Semaphore::Post(void){
 int Semaphore::Wait(void){
   // Wait
   pthread_mutex_lock(&this->m);
-  this->value++;
+  this->value--;
   
-  if (this->value <= 0){
+  if (this->value < 0){
     // signal that this is ready
     pthread_cond_wait(&this->c, &this->m); 
   }

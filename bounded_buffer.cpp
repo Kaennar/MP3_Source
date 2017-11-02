@@ -4,6 +4,7 @@
 
 // Includes
 #include <iostream>
+// Redoing this in C because fuck C++ 
 
 
 using namespace std;
@@ -12,10 +13,10 @@ BoundedBuffer::BoundedBuffer(int d_size): sem(Semaphore(1)),
                                                            empty(Semaphore(1)),
                                                            full(Semaphore(1)){
   // Need to initialize our semaphores
-  this->pos = 0;
+  this->pos = -1;
   this->size = d_size;
   // Create our buffers
-  this->data = new string[d_size];
+  this->data.resize(d_size);
   // Do any additional setup that might be required
 
 }
@@ -27,10 +28,10 @@ int BoundedBuffer::Pop_On(string data){
   // This seems poorly written. I would rather have something that can
   // work with a stack to implement priority to prevent starvation
   // TODO Starvation proof BoundedBuffer
-  while(this->pos == (this->size-1)){
+  while(this->pos >= (this->size-2)){
    // Release this semaphore
     this->sem.Post();
-    // Wait until the semaphore is not full 
+    // Wait until the semaphore is not full
     this->full.Wait();
     // Get back the Semaphore
     this->sem.Wait(); 
@@ -60,11 +61,10 @@ string BoundedBuffer::Pop_Off(void){
     // Gimme back that sweet sweet control
     this->sem.Wait();
   }
-  bool dat_set = false;
   string val = this->data[this->pos];
-
+  
   //check if we are going from full --> not full    
-  if (this->pos == (this->size-1)){
+  if (this->pos <= (this->size-1)){
     // decrement position and release the full semaphore
     this->pos--;
     this->full.Post();
@@ -72,7 +72,6 @@ string BoundedBuffer::Pop_Off(void){
     // Otherwise we continue normally
     this->pos--;
   }
-  // Otherwise we take care of a failure
   // No value was returned so we do not decrement the value
   // Instead we just return everything
   this->sem.Post();
@@ -81,12 +80,6 @@ string BoundedBuffer::Pop_Off(void){
 
 // OH NO WE"RE GOING DOWN
 BoundedBuffer::~BoundedBuffer(){
-  // free the buffers
-  delete [] this->data;
-  // Free the Semaphores
-  delete &this->sem;
-  delete &this->empty;
-  delete &this->full;
   // Add any additional freedom here
 }
 
